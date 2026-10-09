@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # Builds the GR Mod shell.
 #
-#   ./build.sh dev       -> dist/grmod-dev   (Linux, headless, for development and tests)
-#   ./build.sh windows   -> dist/GRMod.exe   (Windows x64, single file, no console)
-#   ./build.sh all       -> both
+#   ./build.sh dev           -> dist/grmod-dev     (Linux, headless, for development and tests)
+#   ./build.sh windows       -> dist/GRMod.exe     (Windows x64, single file, no console)
+#   ./build.sh darwin        -> dist/grmod-macos   (macOS, native platform backend,
+#                                                   opens the UI in the default browser)
+#   ./build.sh darwin-arm64  -> dist/grmod-macos-arm64   (macOS Apple Silicon)
+#   ./build.sh darwin-amd64  -> dist/grmod-macos-amd64   (macOS Intel)
+#   ./build.sh all           -> dev + windows
 #
 # The version comes from $VERSION, else from ../package.json, else 0.0.0.
-# Everything is pure Go: no C compiler and no Windows machine are needed.
+# Everything is pure Go: no C compiler and no Windows/Mac machine are needed.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 target="${1:-}"
 case "$target" in
-  dev|windows|all) ;;
-  *) echo "usage: $0 dev|windows|all" >&2; exit 2 ;;
+  dev|windows|darwin|darwin-arm64|darwin-amd64|all) ;;
+  *) echo "usage: $0 dev|windows|darwin|darwin-arm64|darwin-amd64|all" >&2; exit 2 ;;
 esac
 
 # ---------------------------------------------------------------- version
@@ -88,8 +92,28 @@ build_windows() {
   fi
 }
 
+build_darwin() {
+  local goarch="${1:-$(go env GOARCH)}"
+  local out="dist/grmod-macos-${goarch}"
+  GOOS=darwin GOARCH="${goarch}" CGO_ENABLED=0 go build -trimpath \
+    -ldflags "-s -w -X main.version=${version}" \
+    -o "${out}" .
+  echo "built:   ${out} ($(wc -c < "${out}" | tr -d ' ') bytes, version ${version})"
+  if [ "${goarch}" = "$(go env GOARCH)" ] && [ "$(go env GOOS)" = "darwin" ]; then
+    # On a Mac, also drop a convenience copy without the arch suffix.
+    cp "${out}" dist/grmod-macos
+    echo "built:   dist/grmod-macos (copy)"
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    echo "sha256:  $(sha256sum "${out}" | cut -d' ' -f1)"
+  fi
+}
+
 case "$target" in
   dev)     build_dev ;;
   windows) build_windows ;;
+  darwin)  build_darwin ;;
+  darwin-arm64) build_darwin arm64 ;;
+  darwin-amd64) build_darwin amd64 ;;
   all)     build_dev; build_windows ;;
 esac

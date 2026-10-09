@@ -574,7 +574,7 @@ export async function restoreCardWall(): Promise<void> {
     const moved = await runPlan(v.root, plan);
     set({ busy: undefined });
     const text = t('wallRestored', { n: images.length }) + (moved ? ` · ${t('parked', { n: moved })}` : '');
-    if (host.info?.kind === 'windows') toast(text, 'ok', { label: t('eject'), run: () => { host.eject(v.id).then(() => { toast(t('ejected'), 'ok'); void refreshVolumes(); }).catch(fail); } });
+    if ((host.info?.kind === 'windows' || host.info?.kind === 'macos')) toast(text, 'ok', { label: t('eject'), run: () => { host.eject(v.id).then(() => { toast(t('ejected'), 'ok'); void refreshVolumes(); }).catch(fail); } });
     else toast(text, 'ok');
   } catch (e) { set({ busy: undefined }); fail(e); }
   void refreshVolumes();
@@ -666,7 +666,7 @@ async function destination(dest: Dest): Promise<{ root: string; volume?: Volume 
 }
 function doneToast(root: string, volume: Volume | undefined, moved: number, file: string, kept = false): void {
   const text = (volume ? t('written', { p: host.join(root, file) }) : t('exported', { p: root })) + (kept ? ` · ${t('wallKept')}` : moved ? ` · ${t('parked', { n: moved })}` : '');
-  if (volume && host.info?.kind === 'windows') {
+  if (volume && (host.info?.kind === 'windows' || host.info?.kind === 'macos')) {
     toast(text, 'ok', { label: t('eject'), run: () => { host.eject(volume.id).then(() => { toast(t('ejected'), 'ok'); void refreshVolumes(); }).catch(fail); } });
   } else toast(text, 'ok', { label: t('reveal'), run: () => { void host.reveal(host.join(root, file)); } });
 }
