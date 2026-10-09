@@ -165,6 +165,22 @@ func sameDevice(path string) bool {
 	return a.Dev == b.Dev
 }
 
+// mntReadOnly mirrors MNT_RDONLY from <sys/mount.h>, which Go's syscall
+// package does not export on darwin.
+const mntReadOnly = 0x1
+
+// isReadOnlyMount reports whether path sits on a read-only mount. This
+// filters out volumes that can never take a firmware file anyway, notably
+// the macOS Recovery volume under /Volumes/Recovery, which is additionally
+// protected by SIP ("operation not permitted" on write).
+func isReadOnlyMount(path string) bool {
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(path, &st); err != nil {
+		return false
+	}
+	return st.Flags&mntReadOnly != 0
+}
+
 func (darwinHost) Volumes(all bool) ([]Volume, error) {
 	entries, err := os.ReadDir("/Volumes")
 	if err != nil {
@@ -178,6 +194,9 @@ func (darwinHost) Volumes(all bool) ([]Volume, error) {
 		root := filepath.Join("/Volumes", e.Name())
 		if sameDevice(root) {
 			continue // the system volume, never offered
+		}
+		if isReadOnlyMount(root) {
+			continue // e.g. /Volumes/Recovery: SIP-protected, not writable
 		}
 		vi, ok := probeVolume(root)
 		if !ok {
