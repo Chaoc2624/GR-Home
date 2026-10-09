@@ -1,0 +1,79 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            asset: grmod-macos-arm64
+          - target: darwin-amd64
+            asset: grmod-macos-amd64
+          - target: windows
+            asset: GRMod.exe
+          - target: dev
+            asset: grmod-dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: shell/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: build UI
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: build shell (${{ matrix.target }})
+        run: |
+          cd shell
+          ./build.sh ${{ matrix.target }}
+
+      - name: unit tests (linux)
+        if: matrix.target == 'dev'
+        run: |
+          cd shell
+          CGO_ENABLED=0 go test ./...
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: shell/dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    name: release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
