@@ -77,3 +77,43 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+
+  pages:
+    name: pages
+    needs: build
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: site/downloads
+          merge-multiple: true
+
+      - name: 生成下载页
+        env:
+          GITHUB_SHA_SHORT: ${{ github.sha }}
+        run: |
+          chmod +x .github/scripts/gen-pages.sh
+          .github/scripts/gen-pages.sh site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: 部署到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
